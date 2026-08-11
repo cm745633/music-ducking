@@ -1,0 +1,91 @@
+name: 建置 APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 取出原始碼
+        uses: actions/checkout@v4
+
+      - name: 安裝 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: 準備 Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
+
+      - name: 準備 Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.5'
+
+      - name: 建置 debug APK
+        run: gradle assembleDebug --stacktrace
+
+      - name: 整理產出
+        id: pack
+        run: |
+          set -e
+          mkdir -p out
+          SRC=app/build/outputs/apk/debug/app-debug.apk
+          test -f "$SRC"
+          cp "$SRC" out/narrator.apk
+          echo "size=$(du -h out/narrator.apk | cut -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: 發布 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: 旁白插播 v1.0.${{ github.run_number }}
+          make_latest: true
+          files: out/narrator.apk
+          body: |
+            隨機日文旁白插播器 — debug 簽章版，可直接側載安裝。
+
+            **手機直接下載：** 點下面的 `narrator.apk`
+
+            固定連結（永遠指向最新版）：
+            `https://github.com/${{ github.repository }}/releases/latest/download/narrator.apk`
+
+            - 版本：v1.0.${{ github.run_number }}
+            - 建置時間：${{ github.event.repository.updated_at }}
+            - 檔案大小：${{ steps.pack.outputs.size }}
+            - 語音：600 條（6 角色 × 100）
+
+            安裝後請先做兩件事：
+            1. 把本 App 加入電池最佳化白名單（App 內「設定與匯出」有按鈕）
+            2. 放音樂 → 按「試播」→ 調旁白音量滑桿
+
+      - name: 在摘要顯示下載連結
+        if: success()
+        run: |
+          {
+            echo "## 建置成功"
+            echo ""
+            echo "手機開這個網址就能下載安裝："
+            echo ""
+            echo "https://github.com/${{ github.repository }}/releases/latest/download/narrator.apk"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 建置失敗時保留產出以供診斷
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-debug-output
+          path: |
+            app/build/outputs/
+            app/build/reports/
+          if-no-files-found: ignore
