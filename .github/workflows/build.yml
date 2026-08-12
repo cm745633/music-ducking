@@ -48,8 +48,8 @@ jobs:
       - name: 發布 Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.${{ github.run_number }}
-          name: 旁白插播 v1.0.${{ github.run_number }}
+          tag_name: v1.1.${{ github.run_number }}
+          name: 旁白插播 v1.1.${{ github.run_number }}
           make_latest: true
           files: out/narrator.apk
           body: |
@@ -60,7 +60,7 @@ jobs:
             固定連結（永遠指向最新版）：
             `https://github.com/${{ github.repository }}/releases/latest/download/narrator.apk`
 
-            - 版本：v1.0.${{ github.run_number }}
+            - 版本：v1.1.${{ github.run_number }}
             - 建置時間：${{ github.event.repository.updated_at }}
             - 檔案大小：${{ steps.pack.outputs.size }}
             - 語音：600 條（6 角色 × 100）
