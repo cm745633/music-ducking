@@ -13,6 +13,7 @@ import android.hardware.SensorManager
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
@@ -26,7 +27,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlin.math.pow
 
 class NarratorService : Service() {
 
@@ -34,6 +34,7 @@ class NarratorService : Service() {
         const val ACTION_START = "com.narrator.jp.START"
         const val ACTION_STOP = "com.narrator.jp.STOP"
         const val ACTION_FLAG_SLOT = "com.narrator.jp.FLAG_SLOT"
+        const val ACTION_NOTIF_DISMISSED = "com.narrator.jp.NOTIF_DISMISSED"
         const val EXTRA_SLOT = "slot"
 
         const val BROADCAST_UPDATED = "com.narrator.jp.UPDATED"
@@ -43,6 +44,9 @@ class NarratorService : Service() {
         private const val RECENT_SHOWN = 3
         private const val LOG_RETENTION_MS = 30L * 24 * 60 * 60 * 1000
         private const val PURGE_EVERY_MS = 60L * 60 * 1000
+
+        /** 等待期間每秒重算一次截止時間，通勤模式切換才能立刻反映。 */
+        private const val WAIT_TICK_MS = 1000L
 
         @Volatile
         var isRunning: Boolean = false
@@ -105,6 +109,16 @@ class NarratorService : Service() {
                 handleFlagSlot(intent.getIntExtra(EXTRA_SLOT, 0))
             }
 
+            ACTION_NOTIF_DISMISSED -> {
+                // Android 14 起系統允許使用者滑掉前景服務通知，App 無法真的禁止。
+                // 唯一的辦法是被滑掉的當下立刻貼回去——上面的 enterForeground()
+                // 已經重貼了，這裡只處理「服務其實已經該收工」的情況。
+                if (loopJob?.isActive != true) {
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
+            }
+
             else -> {
                 startLoop()
             }
@@ -121,7 +135,11 @@ class NarratorService : Service() {
     // ---------- 迴圈 ----------
 
     private fun startLoop() {
-        if (loopJob?.isActive == true) return
+        if (loopJob?.isActive == true) {
+            // 已在跑：這次多半是設定變更（例如搖晃開關），重新套用即可。
+            applyShakeSetting()
+            return
+        }
         isRunning = true
         Prefs.setWasRunning(this, true)
         acquireWakeLock()
@@ -130,7 +148,16 @@ class NarratorService : Service() {
             refreshState()
             updateNotification()
             while (isActive) {
-                delay(picker.nextIntervalMs())
+                // 等待期間每秒重算截止時間：通勤模式是「隨時勾選隨時生效」的，
+                // 一次 delay 掉整段間隔的話，切換要等下一輪才有反應。
+                val base = picker.nextIntervalMs()
+                val startedAt = SystemClock.elapsedRealtime()
+                while (isActive) {
+                    val target = (base * Prefs.intervalScale(this@NarratorService)).toLong()
+                    val elapsed = SystemClock.elapsedRealtime() - startedAt
+                    if (elapsed >= target) break
+                    delay(minOf(WAIT_TICK_MS, target - elapsed))
+                }
                 if (!isActive) break
                 playOne()
             }
@@ -151,7 +178,7 @@ class NarratorService : Service() {
         updateNotification()
 
         playLock.withLock {
-            player.play(clip, effectiveGain(clip.id), duck = true)
+            player.play(clip, effectiveDb(clip.id), duck = true)
         }
 
         updateNotification()
@@ -159,12 +186,9 @@ class NarratorService : Service() {
         purgeIfDue()
     }
 
-    private fun effectiveGain(clipId: String): Float {
-        val master = Prefs.masterGain(this)
-        val db = gains[clipId] ?: 0f
-        val multiplier = 10.0.pow(db / 20.0).toFloat()
-        return (master * multiplier).coerceIn(0f, 1f)
-    }
+    /** 主音量（dB）疊加單條微調（dB）。負值走衰減，正值走 LoudnessEnhancer。 */
+    private fun effectiveDb(clipId: String): Float =
+        Prefs.masterDb(this) + (gains[clipId] ?: 0f)
 
     private suspend fun refreshState() {
         val dao = AppDb.get(this).dao()
@@ -349,13 +373,26 @@ class NarratorService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        // 被滑掉時觸發，服務收到後立刻把通知貼回去。
+        val revive = PendingIntent.getService(
+            this, 200,
+            Intent(this, NarratorService::class.java).setAction(ACTION_NOTIF_DISMISSED),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val commute = if (Prefs.commuteMode(this)) "　通勤模式" else ""
+        val head = if (snapshot.isEmpty()) "等待第一次插播$commute"
+        else "最近 ${snapshot.size} 條，可直接標記$commute"
+
         val b = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notify)
             .setContentTitle("旁白插播中")
-            .setContentText(if (snapshot.isEmpty()) "等待第一次插播" else "最近 ${snapshot.size} 條，可直接標記")
+            .setContentText(head)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body.toString()))
             .setContentIntent(open)
+            .setDeleteIntent(revive)
             .setOngoing(true)
+            .setAutoCancel(false)
             .setSilent(true)
             .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -366,7 +403,9 @@ class NarratorService : Service() {
             b.addAction(R.drawable.ic_flag, label, slotIntent(i))
         }
 
-        return b.build()
+        val n = b.build()
+        n.flags = n.flags or Notification.FLAG_NO_CLEAR or Notification.FLAG_ONGOING_EVENT
+        return n
     }
 
     private fun slotIntent(slot: Int): PendingIntent {

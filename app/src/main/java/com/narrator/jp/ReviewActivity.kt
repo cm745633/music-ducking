@@ -88,9 +88,7 @@ class ReviewActivity : AppCompatActivity() {
     private fun listen(row: Row) {
         val clip = VoiceIndex.byId(this, row.clipId) ?: return
         lifecycleScope.launch {
-            val gain = Prefs.masterGain(this@ReviewActivity) *
-                Math.pow(10.0, row.gainDb / 20.0).toFloat()
-            player.play(clip, gain.coerceIn(0f, 1f), duck = false)
+            player.play(clip, Prefs.masterDb(this@ReviewActivity) + row.gainDb, duck = false)
         }
     }
 

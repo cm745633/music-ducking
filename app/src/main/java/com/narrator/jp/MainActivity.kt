@@ -10,6 +10,7 @@ import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.SwitchCompat
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
@@ -19,12 +20,15 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import java.util.Locale
+import kotlin.math.pow
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var btnToggle: Button
     private lateinit var tvStats: TextView
+    private lateinit var swCommute: SwitchCompat
     private lateinit var tvGain: TextView
+    private lateinit var tvGainNote: TextView
     private lateinit var sbGain: SeekBar
     private lateinit var tvW1: TextView
     private lateinit var tvW2: TextView
@@ -45,7 +49,9 @@ class MainActivity : AppCompatActivity() {
 
         btnToggle = findViewById(R.id.btn_toggle)
         tvStats = findViewById(R.id.tv_stats)
+        swCommute = findViewById(R.id.sw_commute)
         tvGain = findViewById(R.id.tv_gain)
+        tvGainNote = findViewById(R.id.tv_gain_note)
         sbGain = findViewById(R.id.sb_gain)
         tvW1 = findViewById(R.id.tv_w1)
         tvW2 = findViewById(R.id.tv_w2)
@@ -65,9 +71,16 @@ class MainActivity : AppCompatActivity() {
             btnToggle.postDelayed({ syncToggle() }, 300L)
         }
 
-        findViewById<Button>(R.id.btn_preview).setOnClickListener {
-            doPreview()
+        // 通勤模式：勾了就立刻生效，服務等待中也會馬上縮短，不必重開。
+        swCommute.isChecked = Prefs.commuteMode(this)
+        renderCommute()
+        swCommute.setOnCheckedChangeListener { _, checked ->
+            Prefs.setCommuteMode(this, checked)
+            renderCommute()
+            renderWeights()
         }
+
+        findViewById<Button>(R.id.btn_preview).setOnClickListener { doPreview() }
 
         findViewById<Button>(R.id.btn_timeline).setOnClickListener {
             startActivity(Intent(this, TimelineActivity::class.java))
@@ -79,14 +92,15 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
 
-        // 音量：0.20 ～ 1.00，滑桿 0～80。即時生效，不需重啟服務。
-        sbGain.progress = ((Prefs.masterGain(this) - Prefs.GAIN_MIN) * 100f).toInt().coerceIn(0, 80)
+        // 音量以 dB 表示：-18 ～ +12，0 dB 就是音檔本身的響度。
+        sbGain.max = Prefs.DB_MAX - Prefs.DB_MIN
+        sbGain.progress = (Prefs.masterDb(this).toInt() - Prefs.DB_MIN)
+            .coerceIn(0, sbGain.max)
         renderGain()
         sbGain.onChange { p ->
-            val g = Prefs.GAIN_MIN + p / 100f
-            Prefs.setMasterGain(this, g)
+            Prefs.setMasterDb(this, p + Prefs.DB_MIN)
             renderGain()
-            preview.applyVolume(Prefs.masterGain(this))
+            preview.applyGain(Prefs.masterDb(this))
         }
 
         sbW1.progress = Prefs.wNormal(this).coerceIn(0, 100)
@@ -108,6 +122,7 @@ class MainActivity : AppCompatActivity() {
             while (isActive) {
                 syncToggle()
                 refreshStats()
+                renderGain()
                 delay(3000L)
             }
         }
@@ -131,12 +146,13 @@ class MainActivity : AppCompatActivity() {
     private fun doPreview() {
         val clips = VoiceIndex.all(this)
         if (clips.isEmpty()) {
-            toast("語音索引是空的")
+            Toast.makeText(this, "語音索引是空的", Toast.LENGTH_SHORT).show()
             return
         }
         val clip = clips[(Math.random() * clips.size).toInt().coerceIn(0, clips.size - 1)]
         lifecycleScope.launch {
-            preview.play(clip, Prefs.masterGain(this@MainActivity), duck = true)
+            preview.play(clip, Prefs.masterDb(this@MainActivity), duck = true)
+            renderGain()
         }
     }
 
@@ -154,9 +170,24 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun renderCommute() {
+        swCommute.text = if (Prefs.commuteMode(this)) {
+            "通勤模式（間隔減半，已開啟）"
+        } else {
+            "通勤模式（間隔減半）"
+        }
+    }
+
     private fun renderGain() {
-        val g = Prefs.masterGain(this)
-        tvGain.text = String.format(Locale.US, "旁白音量 %.2f", g)
+        val db = Prefs.masterDb(this).toInt()
+        val times = 10.0.pow(db / 20.0)
+        tvGain.text = String.format(Locale.US, "旁白音量 %+d dB（約 %.2f 倍）", db, times)
+        tvGainNote.text = when {
+            db <= 0 -> "0 dB 以下是單純衰減。放著音樂按試播，邊聽邊調。"
+            VoicePlayer.boostSupported == false ->
+                "這台裝置不支援系統增幅，超過 0 dB 沒有效果。請改用手機本身的媒體音量。"
+            else -> "0 dB 以上由系統的增幅效果處理，不會削波。放著音樂按試播，邊聽邊調。"
+        }
     }
 
     private fun renderWeights() {
@@ -164,10 +195,14 @@ class MainActivity : AppCompatActivity() {
         val b = sbW2.progress
         val l = sbW3.progress
         val total = (n + b + l).coerceAtLeast(1)
-        tvW1.text = "常態 120～240 秒　$n（${pct(n, total)}）"
-        tvW2.text = "連發 20～40 秒　$b（${pct(b, total)}）"
-        tvW3.text = "長靜默 300～420 秒　$l（${pct(l, total)}）"
+        val s = Prefs.intervalScale(this)
+        tvW1.text = "常態 ${rng(120, 240, s)}　$n（${pct(n, total)}）"
+        tvW2.text = "連發 ${rng(20, 40, s)}　$b（${pct(b, total)}）"
+        tvW3.text = "長靜默 ${rng(300, 420, s)}　$l（${pct(l, total)}）"
     }
+
+    private fun rng(lo: Int, hi: Int, scale: Double): String =
+        "${(lo * scale).toInt()}～${(hi * scale).toInt()} 秒"
 
     private fun pct(v: Int, total: Int): String =
         String.format(Locale.US, "%.0f%%", v * 100.0 / total)
@@ -191,10 +226,6 @@ class MainActivity : AppCompatActivity() {
                 this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 101
             )
         }
-    }
-
-    private fun toast(msg: String) {
-        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
     }
 
     private fun SeekBar.onChange(block: (Int) -> Unit) {

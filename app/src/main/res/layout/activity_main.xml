@@ -25,6 +25,14 @@
             android:text="今日播放 0　今日標記 0"
             android:textSize="16sp" />
 
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/sw_commute"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="通勤模式（間隔減半）"
+            android:textSize="16sp" />
+
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
@@ -36,14 +44,14 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="旁白音量 0.80"
+            android:text="旁白音量 +3 dB"
             android:textSize="16sp" />
 
         <SeekBar
             android:id="@+id/sb_gain"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:max="80" />
+            android:max="30" />
 
         <Button
             android:id="@+id/btn_preview"
@@ -53,10 +61,11 @@
             android:text="試播（讓音樂播著，邊聽邊調）" />
 
         <TextView
+            android:id="@+id/tv_gain_note"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
-            android:text="在安靜環境校準出來的音量，套到有音樂的情境一定不對。請放著音樂按試播。"
+            android:text="放著音樂按試播，邊聽邊調。"
             android:textSize="12sp" />
 
         <View

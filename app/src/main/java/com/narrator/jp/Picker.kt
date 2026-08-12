@@ -30,6 +30,11 @@ class Picker(private val ctx: Context) {
         excluded = ids.toSet()
     }
 
+    /**
+     * 回傳「未套用倍率」的基礎間隔。通勤模式的 0.5 倍是由 Service 在等待迴圈裡
+     * 每秒重算時才乘上去的——這樣使用者在等待中途勾選通勤模式，當下就會生效，
+     * 不必等到下一輪。
+     */
     fun nextIntervalMs(): Long {
         val wn = Prefs.wNormal(ctx).coerceAtLeast(0)
         val wb = Prefs.wBurst(ctx).coerceAtLeast(0)
