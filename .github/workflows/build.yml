@@ -53,21 +53,26 @@ jobs:
           make_latest: false
           files: out/narrator-diag.apk
           body: |
-            隨機日文旁白插播器 — debug 簽章版，可直接側載安裝。
+            雜音來源診斷版 — debug 簽章版，可直接側載安裝。
 
-            **手機直接下載：** 點下面的 `narrator.apk`
+            這是**獨立的 App**（名字是「旁白插播 · 診斷」），
+            可以跟正式版同時裝在手機上，資料分開，不會互相影響。
 
-            固定連結（永遠指向最新版）：
-            `https://github.com/${{ github.repository }}/releases/tag/diag-${{ github.run_number }}`
+            **手機直接下載：** 點下面的 `narrator-diag.apk`
 
             - 版本：diag-${{ github.run_number }}
             - 建置時間：${{ github.event.repository.updated_at }}
             - 檔案大小：${{ steps.pack.outputs.size }}
-            - 語音：600 條（6 角色 × 100）
+            - 語音：60 條（6 角色 × 10），每句各有 A/B/C/D 四個版本
 
-            安裝後請先做兩件事：
-            1. 把本 App 加入電池最佳化白名單（App 內「設定與匯出」有按鈕）
-            2. 放音樂 → 按「試播」→ 調旁白音量滑桿
+            怎麼測：
+
+            1. 戴上你平常用的耳機，找個安靜的地方，**不要放音樂**
+            2. 按「循環試播」，它會連續播同一句話的四個版本
+            3. 記下雜音是從哪一格開始出現的（A / B / C / D）
+
+            四個版本的音量已經對齊過了，音量聽起來一樣是正常的。
+            詳細說明看分支裡的 `診斷版說明.md`。
 
       - name: 在摘要顯示下載連結
         if: success()
