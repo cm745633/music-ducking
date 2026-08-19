@@ -68,9 +68,11 @@ class SettingsActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btn_export).setOnClickListener { doExport() }
         findViewById<Button>(R.id.btn_battery).setOnClickListener { openBatterySettings() }
 
+        val total = VoiceIndex.all(this).size
+        val quarantined = VoiceIndex.quarantinedCount(this)
         findViewById<TextView>(R.id.tv_about).text =
             "版本 ${BuildConfig.VERSION_NAME}（建置日 ${BuildConfig.BUILD_DATE}）\n" +
-                "語音 ${VoiceIndex.all(this).size} 條"
+                "語音 $total 條，其中隔離 $quarantined 條，可抽選 ${total - quarantined} 條"
     }
 
     private fun renderSens() {

@@ -39,7 +39,10 @@ class NarratorService : Service() {
 
         const val BROADCAST_UPDATED = "com.narrator.jp.UPDATED"
 
-        private const val CHANNEL_ID = "narrator_service"
+        // 注意：NotificationChannel 一旦建立，重要性就無法用程式改。
+        // 從 IMPORTANCE_LOW 改成 DEFAULT 必須換一個新的 id，否則舊安裝不會生效。
+        private const val CHANNEL_ID = "narrator_service_v2"
+        private const val CHANNEL_ID_OLD = "narrator_service"
         private const val NOTIF_ID = 4711
         private const val RECENT_SHOWN = 3
         private const val LOG_RETENTION_MS = 30L * 24 * 60 * 60 * 1000
@@ -315,15 +318,25 @@ class NarratorService : Service() {
 
     private fun createChannel() {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        try {
+            nm.deleteNotificationChannel(CHANNEL_ID_OLD)
+        } catch (t: Throwable) {
+            // 舊版沒裝過，忽略
+        }
         if (nm.getNotificationChannel(CHANNEL_ID) != null) return
+        // IMPORTANCE_LOW 會被系統歸類為「靜音通知」，在鎖定畫面上會被摺疊或直接隱藏。
+        // 要在鎖定畫面看得到就必須是 DEFAULT 以上；靜音改由 channel 的 sound=null
+        // 與關閉震動來達成，所以提高重要性並不會發出任何聲音。
         val channel = NotificationChannel(
             CHANNEL_ID,
             getString(R.string.channel_name),
-            NotificationManager.IMPORTANCE_LOW
+            NotificationManager.IMPORTANCE_DEFAULT
         )
         channel.setSound(null, null)
         channel.enableVibration(false)
+        channel.enableLights(false)
         channel.setShowBadge(false)
+        channel.lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         nm.createNotificationChannel(channel)
     }
 
@@ -393,10 +406,12 @@ class NarratorService : Service() {
             .setDeleteIntent(revive)
             .setOngoing(true)
             .setAutoCancel(false)
-            .setSilent(true)
             .setOnlyAlertOnce(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            // 預設前景服務通知會延後約 10 秒才顯示，這裡要求立即顯示。
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
 
         for (i in snapshot.indices) {
             val label = if (snapshot[i].flagged) "✓ ${i + 1}" else "✕ ${i + 1}"

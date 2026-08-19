@@ -144,7 +144,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun doPreview() {
-        val clips = VoiceIndex.all(this)
+        val clips = VoiceIndex.playable(this)
         if (clips.isEmpty()) {
             Toast.makeText(this, "語音索引是空的", Toast.LENGTH_SHORT).show()
             return

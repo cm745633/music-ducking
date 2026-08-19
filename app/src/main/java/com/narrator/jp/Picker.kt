@@ -49,9 +49,9 @@ class Picker(private val ctx: Context) {
         }
     }
 
-    /** 抽中最近 60 條之內的就重抽，避免短期重複。 */
+    /** 抽中最近 60 條之內的就重抽，避免短期重複。隔離區的句子不進池子。 */
     fun pick(): Clip? {
-        val pool = VoiceIndex.all(ctx).filter { c -> !excluded.contains(c.id) }
+        val pool = VoiceIndex.playable(ctx).filter { c -> !excluded.contains(c.id) }
         if (pool.isEmpty()) return null
         repeat(200) {
             val c = pool[rng.nextInt(pool.size)]

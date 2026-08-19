@@ -15,7 +15,13 @@ data class Clip(
     val text: String,
     val domain: String,
     val offset: Long,
-    val length: Long
+    val length: Long,
+    /**
+     * 隔離區。PC 端把有問題的句子標成 true，抽選時跳過，但音訊仍留在
+     * voices.bin 裡、索引也還在——所以播放歷史仍看得到原文，
+     * 之後改回 false 就直接復活。欄位不存在時視為 false，舊的 index.json 照舊能用。
+     */
+    val quarantined: Boolean = false
 )
 
 object VoiceIndex {
@@ -44,6 +50,11 @@ object VoiceIndex {
         return byId[id]
     }
 
+    /** 可被抽到的句子（不含隔離區）。 */
+    fun playable(ctx: Context): List<Clip> = all(ctx).filter { c -> !c.quarantined }
+
+    fun quarantinedCount(ctx: Context): Int = all(ctx).count { c -> c.quarantined }
+
     private fun load(ctx: Context): List<Clip> {
         val raw = ctx.applicationContext.assets.open("index.json")
             .bufferedReader(Charsets.UTF_8).use { r -> r.readText() }
@@ -59,7 +70,8 @@ object VoiceIndex {
                     text = o.getString("text"),
                     domain = o.getString("domain"),
                     offset = o.getLong("offset"),
-                    length = o.getLong("length")
+                    length = o.getLong("length"),
+                    quarantined = o.optBoolean("quarantined", false)
                 )
             )
         }
