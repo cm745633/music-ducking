@@ -1,8 +1,8 @@
-name: 建置 APK
+name: 建置診斷版 APK
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ raw-wav ]
   workflow_dispatch:
 
 permissions:
@@ -42,25 +42,25 @@ jobs:
           mkdir -p out
           SRC=app/build/outputs/apk/debug/app-debug.apk
           test -f "$SRC"
-          cp "$SRC" out/narrator.apk
-          echo "size=$(du -h out/narrator.apk | cut -f1)" >> "$GITHUB_OUTPUT"
+          cp "$SRC" out/narrator-diag.apk
+          echo "size=$(du -h out/narrator-diag.apk | cut -f1)" >> "$GITHUB_OUTPUT"
 
       - name: 發布 Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.3.${{ github.run_number }}
-          name: 旁白插播 v1.3.${{ github.run_number }}
-          make_latest: true
-          files: out/narrator.apk
+          tag_name: diag-${{ github.run_number }}
+          name: 旁白插播 diag-${{ github.run_number }}
+          make_latest: false
+          files: out/narrator-diag.apk
           body: |
             隨機日文旁白插播器 — debug 簽章版，可直接側載安裝。
 
             **手機直接下載：** 點下面的 `narrator.apk`
 
             固定連結（永遠指向最新版）：
-            `https://github.com/${{ github.repository }}/releases/latest/download/narrator.apk`
+            `https://github.com/${{ github.repository }}/releases/tag/diag-${{ github.run_number }}`
 
-            - 版本：v1.3.${{ github.run_number }}
+            - 版本：diag-${{ github.run_number }}
             - 建置時間：${{ github.event.repository.updated_at }}
             - 檔案大小：${{ steps.pack.outputs.size }}
             - 語音：600 條（6 角色 × 100）
@@ -77,7 +77,7 @@ jobs:
             echo ""
             echo "手機開這個網址就能下載安裝："
             echo ""
-            echo "https://github.com/${{ github.repository }}/releases/latest/download/narrator.apk"
+            echo "https://github.com/${{ github.repository }}/releases/tag/diag-${{ github.run_number }}"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: 建置失敗時保留產出以供診斷

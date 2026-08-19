@@ -181,7 +181,7 @@ class NarratorService : Service() {
         updateNotification()
 
         playLock.withLock {
-            player.play(clip, effectiveDb(clip.id), duck = true)
+            player.play(clip, Prefs.audioMode(this), effectiveDb(clip.id), duck = true)
         }
 
         updateNotification()
@@ -189,7 +189,7 @@ class NarratorService : Service() {
         purgeIfDue()
     }
 
-    /** 主音量（dB）疊加單條微調（dB）。負值走衰減，正值走 LoudnessEnhancer。 */
+    /** 主音量（dB）疊加單條微調（dB）。診斷版一律 <= 0，只做衰減。 */
     private fun effectiveDb(clipId: String): Float =
         Prefs.masterDb(this) + (gains[clipId] ?: 0f)
 

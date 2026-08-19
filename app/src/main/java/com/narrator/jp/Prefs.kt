@@ -15,12 +15,17 @@ object Prefs {
     private const val K_SHAKE = "shake_enabled"
     private const val K_SHAKE_SENS = "shake_sensitivity"
     private const val K_COMMUTE = "commute_mode"
+    private const val K_MODE = "audio_mode"
     private const val K_WAS_RUNNING = "was_running"
 
-    /** 音量以 dB 表示。0 dB = 音檔原始響度；負值走 MediaPlayer 衰減，正值走 LoudnessEnhancer 增幅。 */
+    /**
+     * 診斷版的音量只允許衰減：上限就是 0 dB。
+     * 正式版在 0 dB 以上會啟用 LoudnessEnhancer，那個效果自帶動態壓縮，
+     * 會讓「雜音是哪來的」多一個變因，所以這裡整條路徑都不碰它。
+     */
     const val DB_MIN = -18
-    const val DB_MAX = 12
-    const val DB_DEFAULT = 3
+    const val DB_MAX = 0
+    const val DB_DEFAULT = 0
 
     /** 通勤模式的間隔倍率。 */
     const val COMMUTE_SCALE = 0.5
@@ -55,6 +60,14 @@ object Prefs {
     }
 
     fun intervalScale(ctx: Context): Double = if (commuteMode(ctx)) COMMUTE_SCALE else 1.0
+
+    /** 0..3，對應 AudioMode 的四個版本。 */
+    fun audioMode(ctx: Context): Int =
+        sp(ctx).getInt(K_MODE, 0).coerceIn(0, AudioMode.COUNT - 1)
+
+    fun setAudioMode(ctx: Context, mode: Int) {
+        sp(ctx).edit().putInt(K_MODE, mode.coerceIn(0, AudioMode.COUNT - 1)).apply()
+    }
 
     fun excludeFlagged(ctx: Context): Boolean = sp(ctx).getBoolean(K_EXCLUDE, true)
 

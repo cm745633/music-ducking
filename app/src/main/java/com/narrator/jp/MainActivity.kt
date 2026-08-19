@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.widget.Button
+import android.widget.RadioButton
+import android.widget.RadioGroup
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
@@ -20,15 +22,20 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import java.util.Locale
-import kotlin.math.pow
 
 class MainActivity : AppCompatActivity() {
 
+    private val modeIds = intArrayOf(
+        R.id.rb_mode_a, R.id.rb_mode_b, R.id.rb_mode_c, R.id.rb_mode_d
+    )
+
+    private lateinit var rgMode: RadioGroup
+    private lateinit var tvModeNote: TextView
     private lateinit var btnToggle: Button
+    private lateinit var btnCompare: Button
     private lateinit var tvStats: TextView
     private lateinit var swCommute: SwitchCompat
     private lateinit var tvGain: TextView
-    private lateinit var tvGainNote: TextView
     private lateinit var sbGain: SeekBar
     private lateinit var tvW1: TextView
     private lateinit var tvW2: TextView
@@ -37,21 +44,23 @@ class MainActivity : AppCompatActivity() {
     private lateinit var sbW2: SeekBar
     private lateinit var sbW3: SeekBar
 
-    /** 試播用的獨立播放器，不經過服務，服務沒開也能校準。 */
     private lateinit var preview: VoicePlayer
 
     private var refreshJob: Job? = null
+    private var compareJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         preview = VoicePlayer(this)
 
+        rgMode = findViewById(R.id.rg_mode)
+        tvModeNote = findViewById(R.id.tv_mode_note)
         btnToggle = findViewById(R.id.btn_toggle)
+        btnCompare = findViewById(R.id.btn_compare)
         tvStats = findViewById(R.id.tv_stats)
         swCommute = findViewById(R.id.sw_commute)
         tvGain = findViewById(R.id.tv_gain)
-        tvGainNote = findViewById(R.id.tv_gain_note)
         sbGain = findViewById(R.id.sb_gain)
         tvW1 = findViewById(R.id.tv_w1)
         tvW2 = findViewById(R.id.tv_w2)
@@ -62,6 +71,22 @@ class MainActivity : AppCompatActivity() {
 
         requestNotificationPermissionIfNeeded()
 
+        for (i in modeIds.indices) {
+            findViewById<RadioButton>(modeIds[i]).text = AudioMode.label(i)
+        }
+        rgMode.check(modeIds[Prefs.audioMode(this)])
+        renderMode()
+        rgMode.setOnCheckedChangeListener { _, checkedId ->
+            val i = modeIds.indexOf(checkedId)
+            if (i >= 0) {
+                Prefs.setAudioMode(this, i)
+                renderMode()
+            }
+        }
+
+        btnCompare.setOnClickListener { doCompare() }
+        findViewById<Button>(R.id.btn_preview).setOnClickListener { doPreview() }
+
         btnToggle.setOnClickListener {
             if (NarratorService.isRunning) {
                 NarratorService.stop(this)
@@ -71,16 +96,11 @@ class MainActivity : AppCompatActivity() {
             btnToggle.postDelayed({ syncToggle() }, 300L)
         }
 
-        // 通勤模式：勾了就立刻生效，服務等待中也會馬上縮短，不必重開。
         swCommute.isChecked = Prefs.commuteMode(this)
-        renderCommute()
         swCommute.setOnCheckedChangeListener { _, checked ->
             Prefs.setCommuteMode(this, checked)
-            renderCommute()
             renderWeights()
         }
-
-        findViewById<Button>(R.id.btn_preview).setOnClickListener { doPreview() }
 
         findViewById<Button>(R.id.btn_timeline).setOnClickListener {
             startActivity(Intent(this, TimelineActivity::class.java))
@@ -92,10 +112,8 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
 
-        // 音量以 dB 表示：-18 ～ +12，0 dB 就是音檔本身的響度。
         sbGain.max = Prefs.DB_MAX - Prefs.DB_MIN
-        sbGain.progress = (Prefs.masterDb(this).toInt() - Prefs.DB_MIN)
-            .coerceIn(0, sbGain.max)
+        sbGain.progress = (Prefs.masterDb(this).toInt() - Prefs.DB_MIN).coerceIn(0, sbGain.max)
         renderGain()
         sbGain.onChange { p ->
             Prefs.setMasterDb(this, p + Prefs.DB_MIN)
@@ -122,7 +140,6 @@ class MainActivity : AppCompatActivity() {
             while (isActive) {
                 syncToggle()
                 refreshStats()
-                renderGain()
                 delay(3000L)
             }
         }
@@ -135,6 +152,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        compareJob?.cancel()
         try {
             preview.stop()
         } catch (t: Throwable) {
@@ -143,16 +161,49 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
+    private fun randomClip(): Clip? {
+        val clips = VoiceIndex.all(this)
+        if (clips.isEmpty()) return null
+        return clips[(Math.random() * clips.size).toInt().coerceIn(0, clips.size - 1)]
+    }
+
     private fun doPreview() {
-        val clips = VoiceIndex.playable(this)
-        if (clips.isEmpty()) {
+        val clip = randomClip()
+        if (clip == null) {
             Toast.makeText(this, "語音索引是空的", Toast.LENGTH_SHORT).show()
             return
         }
-        val clip = clips[(Math.random() * clips.size).toInt().coerceIn(0, clips.size - 1)]
-        lifecycleScope.launch {
-            preview.play(clip, Prefs.masterDb(this@MainActivity), duck = true)
-            renderGain()
+        val mode = Prefs.audioMode(this)
+        compareJob?.cancel()
+        compareJob = lifecycleScope.launch {
+            tvModeNote.text = "${AudioMode.label(mode)}\n${clip.text}"
+            preview.play(clip, mode, Prefs.masterDb(this@MainActivity), duck = true)
+            renderMode()
+        }
+    }
+
+    /** 同一句連續播四個版本。差異要背靠背才聽得出來，隔一分鐘再比是比不出來的。 */
+    private fun doCompare() {
+        if (compareJob?.isActive == true) {
+            compareJob?.cancel()
+            preview.stop()
+            renderMode()
+            return
+        }
+        val clip = randomClip()
+        if (clip == null) {
+            Toast.makeText(this, "語音索引是空的", Toast.LENGTH_SHORT).show()
+            return
+        }
+        compareJob = lifecycleScope.launch {
+            for (m in 0 until AudioMode.COUNT) {
+                tvModeNote.text = "循環試播 ${m + 1}/${AudioMode.COUNT}　${AudioMode.label(m)}\n${clip.text}"
+                preview.play(clip, m, Prefs.masterDb(this@MainActivity), duck = true)
+                delay(600L)
+            }
+            tvModeNote.text = "循環試播結束。\n${clip.text}"
+            delay(2500L)
+            renderMode()
         }
     }
 
@@ -164,30 +215,17 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val dao = AppDb.get(this@MainActivity).dao()
             val since = startOfToday()
-            val plays = dao.countLogsSince(since)
-            val flags = dao.countFlagsSince(since)
-            tvStats.text = "今日播放 $plays　今日標記 $flags"
+            tvStats.text = "今日播放 ${dao.countLogsSince(since)}　今日標記 ${dao.countFlagsSince(since)}"
         }
     }
 
-    private fun renderCommute() {
-        swCommute.text = if (Prefs.commuteMode(this)) {
-            "通勤模式（間隔減半，已開啟）"
-        } else {
-            "通勤模式（間隔減半）"
-        }
+    private fun renderMode() {
+        val m = Prefs.audioMode(this)
+        tvModeNote.text = AudioMode.hint(m)
     }
 
     private fun renderGain() {
-        val db = Prefs.masterDb(this).toInt()
-        val times = 10.0.pow(db / 20.0)
-        tvGain.text = String.format(Locale.US, "旁白音量 %+d dB（約 %.2f 倍）", db, times)
-        tvGainNote.text = when {
-            db <= 0 -> "0 dB 以下是單純衰減。放著音樂按試播，邊聽邊調。"
-            VoicePlayer.boostSupported == false ->
-                "這台裝置不支援系統增幅，超過 0 dB 沒有效果。請改用手機本身的媒體音量。"
-            else -> "0 dB 以上由系統的增幅效果處理，不會削波。放著音樂按試播，邊聽邊調。"
-        }
+        tvGain.text = String.format(Locale.US, "旁白音量 %+d dB（只能衰減）", Prefs.masterDb(this).toInt())
     }
 
     private fun renderWeights() {

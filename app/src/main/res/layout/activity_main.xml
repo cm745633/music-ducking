@@ -10,18 +10,103 @@
         android:orientation="vertical"
         android:padding="20dp">
 
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="診斷版：同一句話有四個版本，切換聽聽看雜音從哪一段開始出現。四個版本的音量已經自動對齊。"
+            android:textSize="13sp" />
+
+        <RadioGroup
+            android:id="@+id/rg_mode"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="vertical">
+
+            <RadioButton
+                android:id="@+id/rb_mode_a"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="15sp" />
+
+            <RadioButton
+                android:id="@+id/rb_mode_b"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="15sp" />
+
+            <RadioButton
+                android:id="@+id/rb_mode_c"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="15sp" />
+
+            <RadioButton
+                android:id="@+id/rb_mode_d"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="15sp" />
+        </RadioGroup>
+
+        <TextView
+            android:id="@+id/tv_mode_note"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="56dp"
+            android:textSize="13sp" />
+
+        <Button
+            android:id="@+id/btn_compare"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="循環試播（同一句 A→B→C→D）" />
+
+        <Button
+            android:id="@+id/btn_preview"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="試播（只播目前選的版本）" />
+
+        <TextView
+            android:id="@+id/tv_gain"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="旁白音量 0 dB"
+            android:textSize="16sp" />
+
+        <SeekBar
+            android:id="@+id/sb_gain"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="18" />
+
+        <TextView
+            android:id="@+id/tv_gain_note"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="診斷版只做衰減，不使用系統增幅（那會多一層壓縮，干擾判斷）。太小聲請用手機的音量鍵。"
+            android:textSize="12sp" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="20dp"
+            android:background="#33888888" />
+
         <Button
             android:id="@+id/btn_toggle"
             android:layout_width="match_parent"
-            android:layout_height="84dp"
+            android:layout_height="72dp"
+            android:layout_marginTop="16dp"
             android:text="開始"
-            android:textSize="24sp" />
+            android:textSize="22sp" />
 
         <TextView
             android:id="@+id/tv_stats"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="8dp"
             android:text="今日播放 0　今日標記 0"
             android:textSize="16sp" />
 
@@ -33,61 +118,12 @@
             android:text="通勤模式（間隔減半）"
             android:textSize="16sp" />
 
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:layout_marginTop="20dp"
-            android:background="#33888888" />
-
-        <TextView
-            android:id="@+id/tv_gain"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="旁白音量 +3 dB"
-            android:textSize="16sp" />
-
-        <SeekBar
-            android:id="@+id/sb_gain"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:max="30" />
-
-        <Button
-            android:id="@+id/btn_preview"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="試播（讓音樂播著，邊聽邊調）" />
-
-        <TextView
-            android:id="@+id/tv_gain_note"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="放著音樂按試播，邊聽邊調。"
-            android:textSize="12sp" />
-
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:layout_marginTop="20dp"
-            android:background="#33888888" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="間隔分布（權重）"
-            android:textSize="16sp"
-            android:textStyle="bold" />
-
         <TextView
             android:id="@+id/tv_w1"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="常態 120～240 秒　70" />
+            android:layout_marginTop="12dp"
+            android:text="常態" />
 
         <SeekBar
             android:id="@+id/sb_w1"
@@ -99,7 +135,7 @@
             android:id="@+id/tv_w2"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="連發 20～40 秒　20" />
+            android:text="連發" />
 
         <SeekBar
             android:id="@+id/sb_w2"
@@ -111,19 +147,13 @@
             android:id="@+id/tv_w3"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="長靜默 300～420 秒　10" />
+            android:text="長靜默" />
 
         <SeekBar
             android:id="@+id/sb_w3"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:max="100" />
-
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:layout_marginTop="20dp"
-            android:background="#33888888" />
 
         <Button
             android:id="@+id/btn_timeline"

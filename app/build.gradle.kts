@@ -18,11 +18,11 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.narrator.jp"
+        applicationId = "com.narrator.jp.diag"
         minSdk = 26
         targetSdk = 34
-        versionCode = 4
-        versionName = "1.3"
+        versionCode = 1
+        versionName = "diag-1.0"
         buildConfigField("String", "BUILD_DATE", "\"$buildStamp\"")
     }
 

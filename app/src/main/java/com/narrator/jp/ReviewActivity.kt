@@ -88,7 +88,12 @@ class ReviewActivity : AppCompatActivity() {
     private fun listen(row: Row) {
         val clip = VoiceIndex.byId(this, row.clipId) ?: return
         lifecycleScope.launch {
-            player.play(clip, Prefs.masterDb(this@ReviewActivity) + row.gainDb, duck = false)
+            player.play(
+                clip,
+                Prefs.audioMode(this@ReviewActivity),
+                Prefs.masterDb(this@ReviewActivity) + row.gainDb,
+                duck = false
+            )
         }
     }
 

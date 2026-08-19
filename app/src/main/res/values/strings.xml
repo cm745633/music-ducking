@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">旁白插播</string>
+    <string name="app_name">旁白插播 · 診斷</string>
     <string name="title_timeline">播放時間軸</string>
     <string name="title_review">待分類</string>
     <string name="title_settings">設定</string>
     <string name="tile_label">標記旁白</string>
-    <string name="channel_name">旁白插播服務</string>
+    <string name="channel_name">旁白插播服務（診斷版）</string>
 </resources>

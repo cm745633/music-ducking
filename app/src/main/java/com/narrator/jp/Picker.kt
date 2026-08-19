@@ -10,7 +10,8 @@ import java.util.Random
 class Picker(private val ctx: Context) {
 
     companion object {
-        const val RING_SIZE = 60
+        // 診斷版只有 60 條，ring buffer 必須明顯小於池子，否則每一條都會被排除。
+        const val RING_SIZE = 20
 
         const val NORMAL_MIN_MS = 120_000L
         const val NORMAL_MAX_MS = 240_000L
